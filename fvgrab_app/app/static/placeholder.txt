@@ -1,0 +1,2 @@
+# This is a placeholder file to create the static directory.
+# You can delete this file later.

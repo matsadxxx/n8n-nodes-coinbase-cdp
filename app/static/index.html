@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FVGrab Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; color: #555; }
+        label { display: block; margin-top: 10px; font-weight: bold; color: #666; }
+        input[type="text"], input[type="date"], input[type="number"], select {
+            width: calc(100% - 24px); padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        }
+        input[type="checkbox"] { margin-top: 5px; margin-right: 5px; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; font-size: 1em; }
+        button:hover { background-color: #0056b3; }
+        pre { background-color: #f0f0f0; border: 1px solid #ddd; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto; font-family: monospace; }
+        .section { margin-bottom: 30px; }
+        .log-area { border: 1px solid #ccc; min-height: 100px; padding: 10px; background-color: #f9f9f9; margin-top:10px; max-height: 250px; overflow-y: auto; font-size: 0.9em; }
+        #ws_status { margin-top:10px; font-weight: bold; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { margin-bottom: 3px;}
+    </style>
+</head>
+<body>
+    <h1>FVGrab Dashboard</h1>
+
+    <!-- Real-time FVG Updates -->
+    <div class="container section">
+        <h2>Real-time FVG Updates</h2>
+        <div class="input-group">
+            <label for="rt_category">Category (e.g., spot, linear):</label>
+            <input type="text" id="rt_category" value="spot">
+        </div>
+        <div class="input-group">
+            <label for="rt_symbol">Symbol (e.g., BTCUSDT):</label>
+            <input type="text" id="rt_symbol" value="BTCUSDT">
+        </div>
+        <div class="input-group">
+            <label for="rt_interval">Interval (e.g., 1, 5, 15):</label>
+            <input type="text" id="rt_interval" value="1">
+        </div>
+        <button onclick="connectWebSocket()">Connect</button>
+        <button onclick="disconnectWebSocket()">Disconnect</button>
+        <div id="ws_status">Status: Disconnected</div>
+        <h3>Received FVGs:</h3>
+        <div id="fvg_messages" class="log-area"></div>
+    </div>
+
+    <!-- Historical FVG -->
+    <div class="container section">
+        <h2>Historical FVG</h2>
+        <div class="input-group"><label for="hist_category">Category:</label> <input type="text" id="hist_category" value="spot"></div>
+        <div class="input-group"><label for="hist_symbol">Symbol:</label> <input type="text" id="hist_symbol" value="BTCUSDT"></div>
+        <div class="input-group"><label for="hist_interval">Interval:</label> <input type="text" id="hist_interval" value="15"></div>
+        <div class="input-group"><label for="hist_start_date">Start Date:</label> <input type="date" id="hist_start_date"></div>
+        <div class="input-group"><label for="hist_end_date">End Date:</label> <input type="date" id="hist_end_date"></div>
+        <div class="input-group"><label for="hist_auto_threshold">Auto Threshold:</label> <input type="checkbox" id="hist_auto_threshold" checked></div>
+        <button onclick="fetchHistoricalData()">Fetch Historical FVGs</button>
+        <h3>Results:</h3>
+        <pre id="historical_results"></pre>
+    </div>
+
+    <!-- Backtest -->
+    <div class="container section">
+        <h2>Run Backtest</h2>
+        <div class="input-group"><label for="bt_symbol">Symbol:</label> <input type="text" id="bt_symbol" value="BTCUSDT"></div>
+        <div class="input-group"><label for="bt_interval">Interval:</label> <input type="text" id="bt_interval" value="15"></div>
+        <div class="input-group"><label for="bt_category">Category:</label> <input type="text" id="bt_category" value="spot"></div>
+        <div class="input-group"><label for="bt_start_date">Start Date:</label> <input type="date" id="bt_start_date"></div>
+        <div class="input-group"><label for="bt_end_date">End Date:</label> <input type="date" id="bt_end_date"></div>
+        <div class="input-group"><label for="bt_initial_balance">Initial Balance:</label> <input type="number" id="bt_initial_balance" value="10000"></div>
+        <div class="input-group"><label for="bt_risk_percent">Risk per Trade (%):</label> <input type="number" id="bt_risk_percent" value="1" step="0.1"></div>
+        <div class="input-group"><label for="bt_rr_override">R:R Override (optional):</label> <input type="number" id="bt_rr_override" step="0.1" placeholder="e.g., 2.0 for 2:1"></div>
+        <div class="input-group"><label for="bt_commission_percent">Commission (%):</label> <input type="number" id="bt_commission_percent" value="0.06" step="0.01"></div>
+        <div class="input-group"><label for="bt_auto_threshold_fvg">FVG Auto Threshold:</label> <input type="checkbox" id="bt_auto_threshold_fvg" checked></div>
+        <div class="input-group"><label for="bt_rfr_annual">Annual Risk-Free Rate (%):</label> <input type="number" id="bt_rfr_annual" value="0" step="0.01"></div>
+        <button onclick="runBacktestRequest()">Run Backtest</button>
+        <h3>Results:</h3>
+        <pre id="backtest_results"></pre>
+    </div>
+
+    <script>
+        let socket;
+        const fvgMessagesDiv = document.getElementById('fvg_messages');
+        const wsStatusDiv = document.getElementById('ws_status');
+        const historicalResultsPre = document.getElementById('historical_results');
+        const backtestResultsPre = document.getElementById('backtest_results');
+
+        // Set default dates for date inputs
+        functionsetDefaultDates() {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            const oneWeekAgo = new Date(today);
+            oneWeekAgo.setDate(today.getDate() - 7);
+            const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0];
+
+            document.getElementById('hist_start_date').value = oneWeekAgoStr;
+            document.getElementById('hist_end_date').value = todayStr;
+            document.getElementById('bt_start_date').value = oneWeekAgoStr;
+            document.getElementById('bt_end_date').value = todayStr;
+        }
+        window.onload = setDefaultDates;
+
+
+        function displayJson(element, data) {
+            element.textContent = JSON.stringify(data, null, 2);
+        }
+
+        function connectWebSocket() {
+            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+                wsStatusDiv.textContent = 'Status: Already connected or connecting.';
+                alert('An existing WebSocket connection is active or attempting to connect.');
+                return;
+            }
+            const category = document.getElementById('rt_category').value.trim();
+            const symbol = document.getElementById('rt_symbol').value.trim().toUpperCase();
+            const interval = document.getElementById('rt_interval').value.trim();
+            if (!symbol || !interval || !category) {
+                alert('Please enter Category, Symbol and Interval for WebSocket.');
+                return;
+            }
+
+            // Use window.location.host for dynamic host, ensure correct protocol (ws/wss)
+            const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = \`\${wsProtocol}//\${window.location.host}/ws/fvg-updates/\${category}/\${symbol}/\${interval}\`;
+
+            socket = new WebSocket(wsUrl);
+            wsStatusDiv.textContent = \`Status: Connecting to \${wsUrl}...\`;
+            fvgMessagesDiv.innerHTML = ''; // Clear previous messages
+
+            socket.onopen = () => {
+                wsStatusDiv.textContent = \`Status: Connected to \${symbol} (\${interval})\`;
+                fvgMessagesDiv.innerHTML += '<p><em>WebSocket connection opened. Waiting for FVG updates...</em></p>';
+            };
+
+            socket.onmessage = event => {
+                try {
+                    const messageData = JSON.parse(event.data);
+                    const fvgEntry = document.createElement('div');
+                    fvgEntry.style.borderBottom = "1px solid #eee";
+                    fvgEntry.style.marginBottom = "5px";
+                    fvgEntry.style.paddingBottom = "5px";
+                    fvgEntry.textContent = JSON.stringify(messageData, null, 2);
+                    fvgMessagesDiv.appendChild(fvgEntry);
+                    fvgMessagesDiv.scrollTop = fvgMessagesDiv.scrollHeight;
+                } catch(e) {
+                    console.error("Error parsing WebSocket message:", e);
+                    fvgMessagesDiv.innerHTML += \`<p><em>Error parsing message: \${event.data}</em></p>\`;
+                }
+            };
+
+            socket.onerror = error => {
+                console.error('WebSocket Error:', error);
+                wsStatusDiv.textContent = 'Status: Error (see browser console).';
+                fvgMessagesDiv.innerHTML += '<p><em>WebSocket error occurred. Check console.</em></p>';
+            };
+
+            socket.onclose = event => {
+                wsStatusDiv.textContent = \`Status: Disconnected from \${symbol} (\${interval}). Code: \${event.code}\`;
+                fvgMessagesDiv.innerHTML += \`<p><em>WebSocket connection closed. Clean: \${event.wasClean}, Reason: \${event.reason || 'N/A'}</em></p>\`;
+                socket = null; // Important to allow reconnection
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.close(1000, "Client initiated disconnect"); // code 1000 for normal closure
+                wsStatusDiv.textContent = 'Status: Disconnecting...';
+            } else {
+                wsStatusDiv.textContent = 'Status: No active connection to disconnect.';
+            }
+        }
+
+        async function fetchHistoricalData() {
+            const category = document.getElementById('hist_category').value.trim();
+            const symbol = document.getElementById('hist_symbol').value.trim().toUpperCase();
+            const interval = document.getElementById('hist_interval').value.trim();
+            const startDate = document.getElementById('hist_start_date').value;
+            const endDate = document.getElementById('hist_end_date').value;
+            const autoThreshold = document.getElementById('hist_auto_threshold').checked;
+
+            if (!symbol || !interval || !startDate || !endDate || !category) {
+                alert('Please fill all historical FVG fields.');
+                return;
+            }
+            const params = new URLSearchParams({ category, symbol, interval, start_date: startDate, end_date: endDate, auto_threshold: autoThreshold.toString() });
+            historicalResultsPre.textContent = 'Fetching...';
+            try {
+                const response = await fetch(\`/api/historical-fvg?\${params}\`);
+                const responseText = await response.text();
+                if (!response.ok) {
+                    throw new Error(\`HTTP error! Status: \${response.status} - \${responseText}\`);
+                }
+                const data = JSON.parse(responseText); // Parse text after checking response.ok
+                displayJson(historicalResultsPre, data);
+            } catch (error) {
+                console.error('Fetch Historical Error:', error);
+                historicalResultsPre.textContent = \`Error: \${error.message}\`;
+            }
+        }
+
+        async function runBacktestRequest() {
+            const payload = {
+                symbol: document.getElementById('bt_symbol').value.trim().toUpperCase(),
+                interval: document.getElementById('bt_interval').value.trim(),
+                category: document.getElementById('bt_category').value.trim(),
+                start_date: document.getElementById('bt_start_date').value,
+                end_date: document.getElementById('bt_end_date').value,
+                initial_balance: parseFloat(document.getElementById('bt_initial_balance').value),
+                risk_per_trade_percent: parseFloat(document.getElementById('bt_risk_percent').value),
+                auto_threshold_fvg: document.getElementById('bt_auto_threshold_fvg').checked,
+                commission_percent: parseFloat(document.getElementById('bt_commission_percent').value),
+                risk_free_rate_annual: parseFloat(document.getElementById('bt_rfr_annual').value) / 100
+            };
+            const rrOverrideInput = document.getElementById('bt_rr_override').value;
+            if (rrOverrideInput && rrOverrideInput.trim() !== "") {
+                 payload.rr_ratio_override = parseFloat(rrOverrideInput);
+            }
+
+
+            if (!payload.symbol || !payload.interval || !payload.start_date || !payload.end_date || !payload.category) {
+                alert('Please fill all required backtest fields (symbol, interval, category, dates).');
+                return;
+            }
+             if (isNaN(payload.initial_balance) || isNaN(payload.risk_per_trade_percent) || isNaN(payload.commission_percent) || isNaN(payload.risk_free_rate_annual)) {
+                alert('Numeric backtest parameters (balance, risk, commission, RFR) are invalid.');
+                return;
+            }
+
+            backtestResultsPre.textContent = 'Running backtest...';
+            try {
+                const response = await fetch('/api/backtest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const responseText = await response.text();
+                if (!response.ok) {
+                    throw new Error(\`HTTP error! Status: \${response.status} - \${responseText}\`);
+                }
+                const data = JSON.parse(responseText);
+                displayJson(backtestResultsPre, data);
+            } catch (error) {
+                console.error('Run Backtest Error:', error);
+                backtestResultsPre.textContent = \`Error: \${error.message}\`;
+            }
+        }
+    </script>
+</body>
+</html>
