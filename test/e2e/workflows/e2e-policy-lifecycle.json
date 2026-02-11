@@ -1,0 +1,274 @@
+{
+  "name": "E2E: Policy Lifecycle Assertions",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "policy",
+        "operation": "create",
+        "policyJson": "{\"scope\":\"project\",\"description\":\"E2E test policy, safe to delete.\",\"rules\":[{\"action\":\"accept\",\"operation\":\"signEvmTransaction\",\"criteria\":[{\"type\":\"ethValue\",\"ethValue\":\"1000000000000000000\",\"operator\":\"<=\"}]}]}"
+      },
+      "id": "create-policy",
+      "name": "Create Policy",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "assert-create",
+      "name": "Assert Create",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "policy>create: no id returned"
+      },
+      "id": "fail-create",
+      "name": "Fail: Create",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [720, 500]
+    },
+    {
+      "parameters": {
+        "resource": "policy",
+        "operation": "get",
+        "policyId": "={{ $('Create Policy').item.json.id }}"
+      },
+      "id": "get-policy",
+      "name": "Get Policy",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [960, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "assert-get",
+      "name": "Assert Get",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "policy>get: no id returned"
+      },
+      "id": "fail-get",
+      "name": "Fail: Get",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1200, 500]
+    },
+    {
+      "parameters": {
+        "resource": "policy",
+        "operation": "update",
+        "policyId": "={{ $('Create Policy').item.json.id }}",
+        "policyJson": "{\"description\":\"E2E test policy, updated.\",\"rules\":[{\"action\":\"accept\",\"operation\":\"signEvmTransaction\",\"criteria\":[{\"type\":\"ethValue\",\"ethValue\":\"2000000000000000000\",\"operator\":\"<=\"}]}]}"
+      },
+      "id": "update-policy",
+      "name": "Update Policy",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [1440, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "assert-update",
+      "name": "Assert Update",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1680, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "policy>update: no id returned"
+      },
+      "id": "fail-update",
+      "name": "Fail: Update",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1680, 500]
+    },
+    {
+      "parameters": {
+        "resource": "policy",
+        "operation": "list"
+      },
+      "id": "list-policies",
+      "name": "List Policies",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [1920, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Array.isArray($json.policies) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "assert-list",
+      "name": "Assert List",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2160, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "policy>list: policies is not an array"
+      },
+      "id": "fail-list",
+      "name": "Fail: List",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [2160, 500]
+    },
+    {
+      "parameters": {
+        "resource": "policy",
+        "operation": "delete",
+        "policyId": "={{ $('Create Policy').item.json.id }}"
+      },
+      "id": "delete-policy",
+      "name": "Delete Policy",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [2400, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.deleted }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "assert-delete",
+      "name": "Assert Delete",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "policy>delete: deleted is not true"
+      },
+      "id": "fail-delete",
+      "name": "Fail: Delete",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [2640, 500]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Create Policy", "type": "main", "index": 0 }]]
+    },
+    "Create Policy": {
+      "main": [[{ "node": "Assert Create", "type": "main", "index": 0 }]]
+    },
+    "Assert Create": {
+      "main": [
+        [{ "node": "Get Policy", "type": "main", "index": 0 }],
+        [{ "node": "Fail: Create", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Policy": {
+      "main": [[{ "node": "Assert Get", "type": "main", "index": 0 }]]
+    },
+    "Assert Get": {
+      "main": [
+        [{ "node": "Update Policy", "type": "main", "index": 0 }],
+        [{ "node": "Fail: Get", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Policy": {
+      "main": [[{ "node": "Assert Update", "type": "main", "index": 0 }]]
+    },
+    "Assert Update": {
+      "main": [
+        [{ "node": "List Policies", "type": "main", "index": 0 }],
+        [{ "node": "Fail: Update", "type": "main", "index": 0 }]
+      ]
+    },
+    "List Policies": {
+      "main": [[{ "node": "Assert List", "type": "main", "index": 0 }]]
+    },
+    "Assert List": {
+      "main": [
+        [{ "node": "Delete Policy", "type": "main", "index": 0 }],
+        [{ "node": "Fail: List", "type": "main", "index": 0 }]
+      ]
+    },
+    "Delete Policy": {
+      "main": [[{ "node": "Assert Delete", "type": "main", "index": 0 }]]
+    },
+    "Assert Delete": {
+      "main": [
+        [],
+        [{ "node": "Fail: Delete", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

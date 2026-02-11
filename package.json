@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-coinbase-cdp-agentkit",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "n8n community node for Coinbase Developer Platform (CDP) - wallets, transfers, swaps, and AI agent tools",
   "keywords": [
     "n8n-community-node-package",
@@ -36,8 +36,9 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
-    "test:e2e": "npx ts-node test/e2e/run-workflows.ts",
-    "test:all": "jest --coverage && npx ts-node test/e2e/run-workflows.ts",
+    "test:e2e": "npm run build && npx ts-node test/e2e/run-workflows.ts",
+    "test:e2e:ui": "npm run build && npx ts-node test/e2e/run-workflows.ts --keep-running",
+    "test:all": "jest --coverage && npm run test:e2e",
     "prepublishOnly": "npm run build"
   },
   "files": [

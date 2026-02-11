@@ -2,20 +2,32 @@
  * E2E Workflow Runner
  *
  * Runs example workflows against a live n8n instance with real CDP credentials.
- * Requires: n8n running on localhost:5678 (npm run dev) and .env with CDP keys.
+ * If N8N_URL is set, connects to that instance. Otherwise, auto-spawns n8n.
  *
- * Usage: npm run test:e2e
+ * Usage:
+ *   npm run test:e2e                    # auto-spawn n8n on port 5679
+ *   npm run test:e2e:ui                 # same, but keep n8n running after tests
+ *   N8N_URL=http://localhost:5678 npm run test:e2e  # use external instance
  */
 
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn, ChildProcess } from 'child_process';
+import * as os from 'os';
 
-const N8N_URL = process.env.N8N_URL || 'http://localhost:5678';
+const N8N_E2E_PORT = process.env.N8N_E2E_PORT || '5679';
+const DEFAULT_N8N_URL = `http://localhost:${N8N_E2E_PORT}`;
 const N8N_EMAIL = process.env.N8N_EMAIL || 'test@test.com';
 const N8N_PASSWORD = process.env.N8N_PASSWORD || 'TestPass123!';
 const POLL_INTERVAL = 2000;
 const POLL_TIMEOUT = 30000;
+const SPAWN_TIMEOUT = 60000;
+const KEEP_RUNNING = process.argv.includes('--keep-running');
+
+let n8nUrl = process.env.N8N_URL || '';
+let spawnedProc: ChildProcess | null = null;
+let spawnedTmpDir: string | null = null;
 
 // ── HTTP helper ──────────────────────────────────────────────────────────────
 
@@ -26,7 +38,7 @@ function req(
 	cookie?: string,
 ): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }> {
 	return new Promise((resolve, reject) => {
-		const url = new URL(urlPath, N8N_URL);
+		const url = new URL(urlPath, n8nUrl);
 		const data = body ? JSON.stringify(body) : '';
 		const headers: Record<string, string> = {};
 		if (cookie) headers.Cookie = cookie;
@@ -79,6 +91,92 @@ function loadEnv(): Record<string, string> {
 		throw new Error('.env missing CDP_API_KEY_ID or CDP_API_KEY_SECRET');
 	}
 	return env;
+}
+
+// ── n8n spawn/teardown ──────────────────────────────────────────────────────
+
+function cleanup(): void {
+	if (spawnedProc?.pid) {
+		// Kill the entire process group (npx + n8n child)
+		try { process.kill(-spawnedProc.pid, 'SIGTERM'); } catch { /* already dead */ }
+		spawnedProc = null;
+	}
+	if (spawnedTmpDir) {
+		fs.rmSync(spawnedTmpDir, { recursive: true, force: true });
+		spawnedTmpDir = null;
+	}
+}
+
+process.on('exit', cleanup);
+process.on('SIGINT', () => { cleanup(); process.exit(130); });
+process.on('SIGTERM', () => { cleanup(); process.exit(143); });
+
+async function setupOwner(): Promise<void> {
+	const res = await req('POST', '/rest/owner/setup', {
+		email: N8N_EMAIL,
+		firstName: 'E2E',
+		lastName: 'Test',
+		password: N8N_PASSWORD,
+	});
+	if (res.status !== 200) {
+		throw new Error(`Owner setup failed (${res.status}): ${res.body.substring(0, 200)}`);
+	}
+}
+
+async function spawnN8n(): Promise<void> {
+	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'n8n-e2e-'));
+	spawnedTmpDir = tmpDir;
+
+	console.log(`Spawning n8n on port ${N8N_E2E_PORT} (user folder: ${tmpDir})`);
+
+	const proc = spawn('npx', ['n8n', 'start'], {
+		env: {
+			...process.env,
+			N8N_USER_FOLDER: tmpDir,
+			N8N_PORT: N8N_E2E_PORT,
+			N8N_CUSTOM_EXTENSIONS: process.cwd(),
+			N8N_DIAGNOSTICS_ENABLED: 'false',
+			N8N_PERSONALIZATION_ENABLED: 'false',
+		},
+		stdio: ['ignore', 'pipe', 'pipe'],
+		detached: true,
+	});
+	spawnedProc = proc;
+
+	// Wait for "Editor is now accessible" — the definitive signal that
+	// controllers are registered and the REST API is ready.
+	const ready = new Promise<void>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			reject(new Error(`n8n did not become ready within ${SPAWN_TIMEOUT / 1000}s`));
+		}, SPAWN_TIMEOUT);
+
+		proc.stdout?.on('data', (data: Buffer) => {
+			const line = data.toString().trim();
+			if (line) console.log(`  [n8n] ${line}`);
+			if (data.toString().includes('Editor is now accessible')) {
+				clearTimeout(timeout);
+				resolve();
+			}
+		});
+		proc.stderr?.on('data', (data: Buffer) => {
+			const line = data.toString().trim();
+			if (line) console.log(`  [n8n:err] ${line}`);
+		});
+		proc.on('exit', (code) => {
+			clearTimeout(timeout);
+			if (spawnedProc === proc) {
+				spawnedProc = null;
+			}
+			reject(new Error(`n8n exited unexpectedly with code ${code}`));
+		});
+	});
+
+	n8nUrl = DEFAULT_N8N_URL;
+	await ready;
+	console.log('n8n is ready\n');
+
+	await setupOwner();
+	console.log('Owner account created\n');
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -275,123 +373,195 @@ const VALIDATE_ONLY_WORKFLOWS = [
 	'swap-tokens.json',
 ];
 
+// Assertion test workflows with IF + StopAndError nodes for output validation
+const TEST_WORKFLOWS_DIR = path.join(process.cwd(), 'test', 'e2e', 'workflows');
+const TEST_WORKFLOWS = [
+	'e2e-evm-account.json',
+	'e2e-multi-chain-accounts.json',
+	'e2e-faucet.json',
+	'e2e-transfer.json',
+	'e2e-swap-quote.json',
+	'e2e-policy-lifecycle.json',
+];
+
 async function main() {
 	console.log('=== n8n E2E Workflow Runner ===\n');
 
-	// Verify n8n is accessible
-	try {
-		await req('GET', '/healthz');
-	} catch {
-		console.error('ERROR: n8n is not running. Start it with: npm run dev');
-		process.exit(1);
+	const isExternalInstance = !!process.env.N8N_URL;
+
+	if (isExternalInstance) {
+		n8nUrl = process.env.N8N_URL!;
+		console.log(`Using external n8n at ${n8nUrl}\n`);
+		try {
+			await req('GET', '/healthz/readiness');
+		} catch {
+			console.error(`ERROR: n8n is not reachable at ${n8nUrl}`);
+			process.exit(1);
+		}
+	} else {
+		await spawnN8n();
 	}
 
-	const env = loadEnv();
-	const cookie = await login();
-	console.log('Logged in to n8n\n');
+	try {
+		const env = loadEnv();
+		const cookie = await login();
+		console.log('Logged in to n8n\n');
 
-	const credId = await createCredential(cookie, env);
-	console.log(`Credential created (id: ${credId})\n`);
+		const credId = await createCredential(cookie, env);
+		console.log(`Credential created (id: ${credId})\n`);
 
-	const examplesDir = path.join(process.cwd(), 'examples');
-	let passed = 0;
-	let failed = 0;
-	let skipped = 0;
+		const examplesDir = path.join(process.cwd(), 'examples');
+		let passed = 0;
+		let failed = 0;
+		let skipped = 0;
 
-	// ── Execute workflows with ManualTrigger ──
-	console.log('--- Executing Workflows ---\n');
+		// ── Execute workflows with ManualTrigger ──
+		console.log('--- Executing Workflows ---\n');
 
-	for (const file of EXECUTABLE_WORKFLOWS) {
-		const filePath = path.join(examplesDir, file);
-		const label = file.replace('.json', '');
-		process.stdout.write(`  ${label}... `);
+		for (const file of EXECUTABLE_WORKFLOWS) {
+			const filePath = path.join(examplesDir, file);
+			const label = file.replace('.json', '');
+			process.stdout.write(`  ${label}... `);
 
-		try {
-			const result = await executeWorkflow(cookie, filePath, credId);
+			try {
+				const result = await executeWorkflow(cookie, filePath, credId);
 
-			if (result.status === 'success') {
-				const nodeInfo = result.nodes
-					.map((n) => `${n.name}(${n.time}ms)`)
-					.join(' -> ');
-				console.log(`OK  ${result.duration}ms  [${nodeInfo}]`);
+				if (result.status === 'success') {
+					const nodeInfo = result.nodes
+						.map((n) => `${n.name}(${n.time}ms)`)
+						.join(' -> ');
+					console.log(`OK  ${result.duration}ms  [${nodeInfo}]`);
 
-				for (const node of result.nodes) {
-					if (node.output) {
-						console.log(`    ${node.name}: ${JSON.stringify(node.output)}`);
+					for (const node of result.nodes) {
+						if (node.output) {
+							console.log(`    ${node.name}: ${JSON.stringify(node.output)}`);
+						}
+					}
+					passed++;
+				} else if (result.status === 'error') {
+					const failedNode = result.nodes.find((n) => n.status !== 'success');
+					console.log(`FAIL  ${failedNode?.name}: ${failedNode?.error || 'unknown error'}`);
+					failed++;
+				} else {
+					console.log(`${result.status.toUpperCase()}`);
+					failed++;
+				}
+			} catch (e) {
+				console.log(`ERROR  ${(e as Error).message}`);
+				failed++;
+			}
+		}
+
+		// ── Assertion test workflows ──
+		console.log('\n--- Assertion Test Workflows ---\n');
+
+		for (const file of TEST_WORKFLOWS) {
+			const filePath = path.join(TEST_WORKFLOWS_DIR, file);
+			const label = file.replace('.json', '');
+			process.stdout.write(`  ${label}... `);
+
+			try {
+				const result = await executeWorkflow(cookie, filePath, credId);
+
+				if (result.status === 'success') {
+					const nodeInfo = result.nodes
+						.map((n) => `${n.name}(${n.time}ms)`)
+						.join(' -> ');
+					console.log(`OK  ${result.duration}ms  [${nodeInfo}]`);
+
+					for (const node of result.nodes) {
+						if (node.output) {
+							console.log(`    ${node.name}: ${JSON.stringify(node.output)}`);
+						}
+					}
+					passed++;
+				} else if (result.status === 'error') {
+					const failedNode = result.nodes.find((n) => n.status !== 'success');
+					console.log(`FAIL  ${failedNode?.name}: ${failedNode?.error || 'unknown error'}`);
+					failed++;
+				} else {
+					console.log(`${result.status.toUpperCase()}`);
+					failed++;
+				}
+			} catch (e) {
+				console.log(`ERROR  ${(e as Error).message}`);
+				failed++;
+			}
+		}
+
+		// ── Validate-only workflows ──
+		console.log('\n--- Validating Workflow Structure ---\n');
+
+		for (const file of VALIDATE_ONLY_WORKFLOWS) {
+			const filePath = path.join(examplesDir, file);
+			const label = file.replace('.json', '');
+			process.stdout.write(`  ${label}... `);
+
+			try {
+				const raw = fs.readFileSync(filePath, 'utf8');
+				const workflow = JSON.parse(raw);
+
+				// Validate structure
+				const errors: string[] = [];
+				if (!workflow.name) errors.push('missing name');
+				if (!Array.isArray(workflow.nodes) || workflow.nodes.length === 0) errors.push('missing nodes');
+				if (!workflow.connections) errors.push('missing connections');
+
+				// Check all CDP nodes have credentials
+				for (const node of workflow.nodes) {
+					if (node.type?.includes('coinbase') && !node.credentials?.coinbaseCdpApi) {
+						errors.push(`${node.name} missing credentials`);
 					}
 				}
-				passed++;
-			} else if (result.status === 'error') {
-				const failedNode = result.nodes.find((n) => n.status !== 'success');
-				console.log(`FAIL  ${failedNode?.name}: ${failedNode?.error || 'unknown error'}`);
-				failed++;
-			} else {
-				console.log(`${result.status.toUpperCase()}`);
+
+				// Check all connections reference existing nodes
+				const nodeNames = new Set(workflow.nodes.map((n: { name: string }) => n.name));
+				for (const sourceName of Object.keys(workflow.connections)) {
+					if (!nodeNames.has(sourceName)) {
+						errors.push(`connection from non-existent node: ${sourceName}`);
+					}
+				}
+
+				if (errors.length > 0) {
+					console.log(`INVALID  ${errors.join(', ')}`);
+					failed++;
+				} else {
+					console.log(`VALID  (${workflow.nodes.length} nodes, ${Object.keys(workflow.connections).length} connections)`);
+					skipped++;
+				}
+			} catch (e) {
+				console.log(`ERROR  ${(e as Error).message}`);
 				failed++;
 			}
-		} catch (e) {
-			console.log(`ERROR  ${(e as Error).message}`);
-			failed++;
+		}
+
+		// ── Summary ──
+		console.log('\n========================================');
+		console.log(`  PASSED:    ${passed}`);
+		console.log(`  VALIDATED: ${skipped}`);
+		console.log(`  FAILED:    ${failed}`);
+		console.log('========================================\n');
+
+		// ── Keep running or exit ──
+		if (KEEP_RUNNING && !isExternalInstance && spawnedProc) {
+			console.log(`n8n is running at ${n8nUrl}`);
+			console.log(`  Login: ${N8N_EMAIL} / ${N8N_PASSWORD}`);
+			console.log('  Press Ctrl+C to stop\n');
+			await new Promise<void>((resolve) => {
+				process.on('SIGINT', () => resolve());
+			});
+		}
+
+		process.exit(failed > 0 ? 1 : 0);
+	} finally {
+		if (!KEEP_RUNNING) {
+			cleanup();
 		}
 	}
-
-	// ── Validate-only workflows ──
-	console.log('\n--- Validating Workflow Structure ---\n');
-
-	for (const file of VALIDATE_ONLY_WORKFLOWS) {
-		const filePath = path.join(examplesDir, file);
-		const label = file.replace('.json', '');
-		process.stdout.write(`  ${label}... `);
-
-		try {
-			const raw = fs.readFileSync(filePath, 'utf8');
-			const workflow = JSON.parse(raw);
-
-			// Validate structure
-			const errors: string[] = [];
-			if (!workflow.name) errors.push('missing name');
-			if (!Array.isArray(workflow.nodes) || workflow.nodes.length === 0) errors.push('missing nodes');
-			if (!workflow.connections) errors.push('missing connections');
-
-			// Check all CDP nodes have credentials
-			for (const node of workflow.nodes) {
-				if (node.type?.includes('coinbase') && !node.credentials?.coinbaseCdpApi) {
-					errors.push(`${node.name} missing credentials`);
-				}
-			}
-
-			// Check all connections reference existing nodes
-			const nodeNames = new Set(workflow.nodes.map((n: { name: string }) => n.name));
-			for (const sourceName of Object.keys(workflow.connections)) {
-				if (!nodeNames.has(sourceName)) {
-					errors.push(`connection from non-existent node: ${sourceName}`);
-				}
-			}
-
-			if (errors.length > 0) {
-				console.log(`INVALID  ${errors.join(', ')}`);
-				failed++;
-			} else {
-				console.log(`VALID  (${workflow.nodes.length} nodes, ${Object.keys(workflow.connections).length} connections)`);
-				skipped++;
-			}
-		} catch (e) {
-			console.log(`ERROR  ${(e as Error).message}`);
-			failed++;
-		}
-	}
-
-	// ── Summary ──
-	console.log('\n========================================');
-	console.log(`  PASSED:    ${passed}`);
-	console.log(`  VALIDATED: ${skipped}`);
-	console.log(`  FAILED:    ${failed}`);
-	console.log('========================================\n');
-
-	process.exit(failed > 0 ? 1 : 0);
 }
 
 main().catch((e) => {
+	cleanup();
 	console.error('Fatal:', (e as Error).message);
 	process.exit(1);
 });

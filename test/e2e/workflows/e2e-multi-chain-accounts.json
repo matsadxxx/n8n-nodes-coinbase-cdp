@@ -1,0 +1,128 @@
+{
+  "name": "E2E: Multi-Chain Account Assertions",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "solanaAccount",
+        "operation": "getOrCreate",
+        "accountName": "e2e-solana-acct"
+      },
+      "id": "solana-account",
+      "name": "Solana Account",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.address }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "assert-solana",
+      "name": "Assert Solana",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "solanaAccount>getOrCreate: address is empty"
+      },
+      "id": "fail-solana",
+      "name": "Fail: Solana",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [720, 500]
+    },
+    {
+      "parameters": {
+        "resource": "smartAccount",
+        "operation": "getOrCreate",
+        "ownerAccountName": "e2e-sa-owner",
+        "smartAccountName": "e2e-smart-acct"
+      },
+      "id": "smart-account",
+      "name": "Smart Account",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [960, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.address }}",
+              "operation": "startsWith",
+              "value2": "0x"
+            },
+            {
+              "value1": "={{ $json.ownerAddress }}",
+              "operation": "startsWith",
+              "value2": "0x"
+            }
+          ]
+        }
+      },
+      "id": "assert-smart",
+      "name": "Assert Smart",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "smartAccount>getOrCreate: address or ownerAddress does not start with 0x"
+      },
+      "id": "fail-smart",
+      "name": "Fail: Smart",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1200, 500]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Solana Account", "type": "main", "index": 0 }]]
+    },
+    "Solana Account": {
+      "main": [[{ "node": "Assert Solana", "type": "main", "index": 0 }]]
+    },
+    "Assert Solana": {
+      "main": [
+        [{ "node": "Smart Account", "type": "main", "index": 0 }],
+        [{ "node": "Fail: Solana", "type": "main", "index": 0 }]
+      ]
+    },
+    "Smart Account": {
+      "main": [[{ "node": "Assert Smart", "type": "main", "index": 0 }]]
+    },
+    "Assert Smart": {
+      "main": [
+        [],
+        [{ "node": "Fail: Smart", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

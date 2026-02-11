@@ -1,5 +1,7 @@
 # n8n-nodes-coinbase-cdp-agentkit
 
+**This is the only open-source n8n node for Coinbase CDP. Never run security-critical crypto tools — wallets, transfers, swaps — from closed-source packages you cannot audit. If you can't read the code, you can lose your funds. [Audit this package yourself.](https://github.com/pvdyck/n8n-nodes-coinbase-cdp)**
+
 n8n community node package for [Coinbase Developer Platform (CDP)](https://docs.cdp.coinbase.com/). Create wallets, transfer tokens, swap assets, and build AI-powered blockchain agents — all from n8n workflows.
 
 > **First AI agent + blockchain integration for any workflow automation platform.**

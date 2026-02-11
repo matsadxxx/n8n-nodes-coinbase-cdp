@@ -1,0 +1,96 @@
+{
+  "name": "E2E: Swap Quote Assertions",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "account",
+        "operation": "getOrCreate",
+        "accountName": "e2e-swap-acct"
+      },
+      "id": "create-account",
+      "name": "Create Account",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "swap",
+        "operation": "quote",
+        "accountName": "e2e-swap-acct",
+        "fromToken": "0x4200000000000000000000000000000000000006",
+        "toToken": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "fromAmount": "1000000000000000",
+        "network": "base"
+      },
+      "id": "get-quote",
+      "name": "Get Quote",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [720, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.fromToken }}",
+              "operation": "isNotEmpty"
+            },
+            {
+              "value1": "={{ $json.network }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "assert-quote",
+      "name": "Assert Quote",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "swap>quote: fromToken or network is empty"
+      },
+      "id": "fail-quote",
+      "name": "Fail: Quote",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [960, 500]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Create Account", "type": "main", "index": 0 }]]
+    },
+    "Create Account": {
+      "main": [[{ "node": "Get Quote", "type": "main", "index": 0 }]]
+    },
+    "Get Quote": {
+      "main": [[{ "node": "Assert Quote", "type": "main", "index": 0 }]]
+    },
+    "Assert Quote": {
+      "main": [
+        [],
+        [{ "node": "Fail: Quote", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
