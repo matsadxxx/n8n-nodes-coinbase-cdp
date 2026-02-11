@@ -1,0 +1,33 @@
+{
+  "name": "Coinbase CDP - Policy Management",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "policy",
+        "operation": "list"
+      },
+      "id": "list-policies",
+      "name": "List All Policies",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "List All Policies", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

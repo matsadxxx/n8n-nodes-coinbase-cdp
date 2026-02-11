@@ -1,0 +1,66 @@
+{
+  "name": "Coinbase CDP - Balance Monitor (Trigger)",
+  "nodes": [
+    {
+      "parameters": {
+        "event": "balanceChanged",
+        "address": "0xYOUR_WALLET_ADDRESS",
+        "network": "base-sepolia"
+      },
+      "id": "balance-trigger",
+      "name": "Balance Changed",
+      "type": "CUSTOM.coinbaseTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.token }}",
+              "value2": "ETH"
+            }
+          ]
+        }
+      },
+      "id": "is-eth",
+      "name": "Is ETH?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "=ETH balance changed from {{ $json.previousBalance }} to {{ $json.currentBalance }} on {{ $json.network }}"
+            }
+          ]
+        }
+      },
+      "id": "format-message",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [720, 200]
+    }
+  ],
+  "connections": {
+    "Balance Changed": {
+      "main": [[{ "node": "Is ETH?", "type": "main", "index": 0 }]]
+    },
+    "Is ETH?": {
+      "main": [
+        [{ "node": "Format Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
