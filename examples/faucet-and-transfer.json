@@ -1,0 +1,73 @@
+{
+  "name": "Coinbase CDP - Faucet & Transfer",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "account",
+        "operation": "getOrCreate",
+        "accountName": "sender-wallet"
+      },
+      "id": "create-sender",
+      "name": "Create Sender",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "account",
+        "operation": "requestFaucet",
+        "address": "={{ $json.address }}",
+        "faucetNetwork": "base-sepolia",
+        "faucetToken": "eth"
+      },
+      "id": "request-faucet",
+      "name": "Request Faucet ETH",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [720, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "balance",
+        "operation": "listTokens",
+        "address": "={{ $('Create Sender').item.json.address }}",
+        "network": "base-sepolia"
+      },
+      "id": "check-balance",
+      "name": "Check Balance After Faucet",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [960, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Create Sender", "type": "main", "index": 0 }]]
+    },
+    "Create Sender": {
+      "main": [[{ "node": "Request Faucet ETH", "type": "main", "index": 0 }]]
+    },
+    "Request Faucet ETH": {
+      "main": [[{ "node": "Check Balance After Faucet", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

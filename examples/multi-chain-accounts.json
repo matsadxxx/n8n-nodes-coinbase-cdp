@@ -1,0 +1,112 @@
+{
+  "name": "Coinbase CDP - Multi-Chain Account Setup",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "account",
+        "operation": "getOrCreate",
+        "accountName": "my-evm-wallet"
+      },
+      "id": "evm-account",
+      "name": "EVM Account",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 200],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "solanaAccount",
+        "operation": "getOrCreate",
+        "accountName": "my-solana-wallet"
+      },
+      "id": "solana-account",
+      "name": "Solana Account",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 400],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "smartAccount",
+        "operation": "getOrCreate",
+        "ownerAccountName": "my-evm-wallet",
+        "smartAccountName": "my-smart-wallet"
+      },
+      "id": "smart-account",
+      "name": "Smart Account",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [720, 200],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "account",
+        "operation": "requestFaucet",
+        "address": "={{ $('EVM Account').item.json.address }}",
+        "faucetNetwork": "base-sepolia",
+        "faucetToken": "eth"
+      },
+      "id": "faucet-evm",
+      "name": "EVM Faucet",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [960, 200],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "solanaAccount",
+        "operation": "requestFaucet",
+        "address": "={{ $json.address }}",
+        "faucetToken": "sol"
+      },
+      "id": "faucet-solana",
+      "name": "Solana Faucet",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [720, 400],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          { "node": "EVM Account", "type": "main", "index": 0 },
+          { "node": "Solana Account", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "EVM Account": {
+      "main": [[{ "node": "Smart Account", "type": "main", "index": 0 }]]
+    },
+    "Smart Account": {
+      "main": [[{ "node": "EVM Faucet", "type": "main", "index": 0 }]]
+    },
+    "Solana Account": {
+      "main": [[{ "node": "Solana Faucet", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,111 @@
+{
+  "name": "Coinbase CDP - AI Agent with Blockchain Tools",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "chat-trigger",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "cdp-agent-chat"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful blockchain assistant that can manage wallets, check balances, and perform transfers on behalf of the user. Always confirm with the user before executing financial transactions."
+        }
+      },
+      "id": "agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "llm",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [360, 520]
+    },
+    {
+      "parameters": {
+        "tool": "walletDetails"
+      },
+      "id": "wallet-tool",
+      "name": "CDP: Wallet Details",
+      "type": "CUSTOM.coinbaseAgentTool",
+      "typeVersion": 1,
+      "position": [520, 520],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "tool": "erc20Balance"
+      },
+      "id": "balance-tool",
+      "name": "CDP: Check Balance",
+      "type": "CUSTOM.coinbaseAgentTool",
+      "typeVersion": 1,
+      "position": [680, 520],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "tool": "nativeTransfer"
+      },
+      "id": "transfer-tool",
+      "name": "CDP: Transfer",
+      "type": "CUSTOM.coinbaseAgentTool",
+      "typeVersion": 1,
+      "position": [840, 520],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "tool": "requestFaucet"
+      },
+      "id": "faucet-tool",
+      "name": "CDP: Faucet",
+      "type": "CUSTOM.coinbaseAgentTool",
+      "typeVersion": 1,
+      "position": [1000, 520],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "CDP: Wallet Details": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "CDP: Check Balance": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "CDP: Transfer": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "CDP: Faucet": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

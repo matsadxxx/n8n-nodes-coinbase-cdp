@@ -1,0 +1,101 @@
+{
+  "name": "Coinbase CDP - Swap Tokens",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "account",
+        "operation": "getOrCreate",
+        "accountName": "trader-wallet"
+      },
+      "id": "create-account",
+      "name": "Get Trader Account",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "swap",
+        "operation": "quote",
+        "accountName": "trader-wallet",
+        "fromToken": "0x4200000000000000000000000000000000000006",
+        "toToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "fromAmount": "10000000000000000",
+        "network": "base"
+      },
+      "id": "quote",
+      "name": "Get Swap Quote (WETH -> USDC)",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [720, 300],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.liquidityAvailable }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-liquidity",
+      "name": "Liquidity Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "resource": "swap",
+        "operation": "execute",
+        "accountName": "trader-wallet",
+        "fromToken": "0x4200000000000000000000000000000000000006",
+        "toToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "fromAmount": "10000000000000000",
+        "network": "base"
+      },
+      "id": "swap",
+      "name": "Execute Swap",
+      "type": "CUSTOM.coinbaseCdp",
+      "typeVersion": 1,
+      "position": [1200, 200],
+      "credentials": {
+        "coinbaseCdpApi": { "id": "1", "name": "Coinbase CDP API" }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Get Trader Account", "type": "main", "index": 0 }]]
+    },
+    "Get Trader Account": {
+      "main": [[{ "node": "Get Swap Quote (WETH -> USDC)", "type": "main", "index": 0 }]]
+    },
+    "Get Swap Quote (WETH -> USDC)": {
+      "main": [[{ "node": "Liquidity Available?", "type": "main", "index": 0 }]]
+    },
+    "Liquidity Available?": {
+      "main": [
+        [{ "node": "Execute Swap", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,17 @@
+{
+  "node": "n8n-nodes-coinbase-cdp.coinbaseTrigger",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["Finance & Accounting"],
+  "subcategories": {
+    "Finance & Accounting": ["Cryptocurrency"]
+  },
+  "resources": {
+    "primaryDocumentation": [
+      {
+        "url": "https://docs.cdp.coinbase.com/"
+      }
+    ]
+  },
+  "alias": ["coinbase", "cdp", "blockchain", "wallet", "crypto", "monitor", "balance"]
+}
