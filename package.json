@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-coinbase-cdp-agentkit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for Coinbase Developer Platform (CDP) - wallets, transfers, swaps, and AI agent tools",
   "keywords": [
     "n8n-community-node-package",

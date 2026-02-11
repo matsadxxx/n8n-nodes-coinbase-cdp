@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-02-11
+
+### Changed
+
+- Move Mermaid architecture diagrams from README to IMPLEMENTATION.md (npm doesn't render Mermaid)
+- Replace Mermaid diagrams with ASCII art in README for npm compatibility
+- Fix package name references throughout README to `n8n-nodes-coinbase-cdp-agentkit`
+- Fix npm badge URL to point to correct package
+
 ## [0.1.0] - 2026-02-11
 
 ### Added
@@ -33,4 +42,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 116 unit tests with 100% code coverage
 - E2E test runner against live n8n
 
+[0.1.1]: https://github.com/pvdyck/n8n-nodes-coinbase-cdp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/pvdyck/n8n-nodes-coinbase-cdp/releases/tag/v0.1.0
