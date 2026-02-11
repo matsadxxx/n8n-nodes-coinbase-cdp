@@ -1,4 +1,4 @@
-# n8n-nodes-coinbase-cdp
+# n8n-nodes-coinbase-cdp-agentkit
 
 n8n community node package for [Coinbase Developer Platform (CDP)](https://docs.cdp.coinbase.com/). Create wallets, transfer tokens, swap assets, and build AI-powered blockchain agents — all from n8n workflows.
 
@@ -6,7 +6,7 @@ n8n community node package for [Coinbase Developer Platform (CDP)](https://docs.
 
 **3 nodes | 7 resources | 16 operations | 7 AI Agent tools | 12 networks | 100% test coverage**
 
-[![npm](https://img.shields.io/npm/v/n8n-nodes-coinbase-cdp)](https://www.npmjs.com/package/n8n-nodes-coinbase-cdp)
+[![npm](https://img.shields.io/npm/v/n8n-nodes-coinbase-cdp-agentkit)](https://www.npmjs.com/package/n8n-nodes-coinbase-cdp-agentkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -31,129 +31,39 @@ n8n community node package for [Coinbase Developer Platform (CDP)](https://docs.
 
 ## Architecture
 
-### AgentKit-First Strategy
-
 This package uses an **AgentKit-first** architecture: 3 focused nodes + 1 shared credential, designed to align with [Coinbase AgentKit](https://docs.cdp.coinbase.com/agent-kit/welcome) conventions while keeping the bundle lightweight by using [`@coinbase/cdp-sdk`](https://github.com/coinbase/cdp-sdk) directly.
 
-```mermaid
-graph TB
-    subgraph Package["n8n-nodes-coinbase-cdp"]
-        subgraph Credential["CoinbaseCdpApi Credential"]
-            AK["API Key ID"]
-            AS["API Secret"]
-            WS["Wallet Secret<br/><i>(optional)</i>"]
-        end
-
-        Credential -->|shared auth| AT["CoinbaseAgentTool<br/><b>AI Tool Node</b><br/>supplyData → 7 tools"]
-        Credential -->|shared auth| CD["CoinbaseCdp<br/><b>Action Node</b><br/>execute → 7 resources"]
-        Credential -->|shared auth| CT["CoinbaseTrigger<br/><b>Polling Trigger</b><br/>poll → balance changes"]
-
-        subgraph Shared["Shared Layer"]
-            CF["cdpClientFactory"]
-            NO["networkOptions"]
-            TF["toolFactory"]
-            TY["types"]
-        end
-
-        AT --> Shared
-        CD --> Shared
-        CT --> Shared
-    end
-
-    Shared -->|initializes| SDK["@coinbase/cdp-sdk"]
-    AT -->|creates| LC["DynamicStructuredTool<br/><i>@langchain/core</i>"]
-    TF -->|validates with| ZD["Zod Schemas"]
+```
+┌──────────────────────────────────────────────────────────┐
+│              n8n-nodes-coinbase-cdp-agentkit              │
+│                                                          │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │           CoinbaseCdpApi Credential                 │ │
+│  │   API Key ID  |  API Secret  |  Wallet Secret (opt) │ │
+│  └──────┬──────────────┬──────────────┬────────────────┘ │
+│         │              │              │                   │
+│         ▼              ▼              ▼                   │
+│  ┌────────────┐ ┌────────────┐ ┌──────────────┐         │
+│  │ AgentTool  │ │ CoinbaseCdp│ │CoinbaseTrigger│         │
+│  │ (AI Tool)  │ │  (Action)  │ │  (Polling)   │         │
+│  │ 7 tools    │ │ 7 resources│ │ balance watch│         │
+│  └─────┬──────┘ └─────┬──────┘ └──────┬───────┘         │
+│        │              │               │                  │
+│        └──────┬───────┴───────┬───────┘                  │
+│               ▼               ▼                          │
+│  ┌──────────────────────────────────────────┐            │
+│  │           Shared Layer                    │            │
+│  │  cdpClientFactory | networkOptions       │            │
+│  │  toolFactory      | types                │            │
+│  └────────────────────┬─────────────────────┘            │
+└───────────────────────┼──────────────────────────────────┘
+                        ▼
+              ┌─────────────────┐
+              │ @coinbase/cdp-sdk│
+              └─────────────────┘
 ```
 
-### Data Flow Between Nodes
-
-```mermaid
-flowchart LR
-    subgraph Inputs
-        MT["Manual Trigger"]
-        CH["Chat Trigger"]
-        SC["Schedule / Cron"]
-    end
-
-    subgraph Processing
-        AI["AI Agent<br/><i>Claude / GPT</i>"]
-        CDP["Coinbase CDP<br/><i>Action Node</i>"]
-        TRG["Coinbase Trigger<br/><i>Balance Monitor</i>"]
-    end
-
-    subgraph Tools["AI Tools (supplyData)"]
-        T1["Wallet Details"]
-        T2["Native Transfer"]
-        T3["ERC-20 Transfer"]
-        T4["Get Balance"]
-        T5["Swap Tokens"]
-        T6["Get Swap Price"]
-        T7["Request Faucet"]
-    end
-
-    MT --> CDP
-    CH --> AI
-    SC --> TRG
-
-    AI -.->|tool calls| T1 & T2 & T3 & T4 & T5 & T6 & T7
-    T1 & T2 & T3 & T4 & T5 & T6 & T7 -.->|results| AI
-
-    CDP --> |json output| Next["Next Node"]
-    AI --> |chat response| Resp["Chat Response"]
-    TRG --> |balance change event| Alert["Alert / Notification"]
-```
-
-### Source File Map
-
-```mermaid
-graph TD
-    subgraph src["src/"]
-        subgraph cred["credentials/"]
-            C1["CoinbaseCdpApi.credentials.ts<br/><i>3-field credential type</i>"]
-        end
-        subgraph icons["icons/"]
-            I1["coinbase.svg"]
-        end
-        subgraph nodes["nodes/"]
-            subgraph agent["CoinbaseAgentTool/"]
-                A1["CoinbaseAgentTool.node.ts<br/><i>supplyData method</i>"]
-                A2["CoinbaseAgentTool.node.json<br/><i>AI codex metadata</i>"]
-                subgraph actions["actions/"]
-                    AA1["walletDetails.ts"]
-                    AA2["nativeTransfer.ts"]
-                    AA3["erc20Transfer.ts"]
-                    AA4["erc20Balance.ts"]
-                    AA5["swap.ts"]
-                    AA6["getSwapPrice.ts"]
-                    AA7["requestFaucet.ts"]
-                end
-            end
-            subgraph cdp["CoinbaseCdp/"]
-                B1["CoinbaseCdp.node.ts<br/><i>execute method, usableAsTool</i>"]
-                B2["CoinbaseCdp.node.json"]
-                subgraph resources["resources/"]
-                    R1["account.ts"]
-                    R2["solanaAccount.ts"]
-                    R3["smartAccount.ts"]
-                    R4["transfer.ts"]
-                    R5["swap.ts"]
-                    R6["policy.ts"]
-                    R7["balance.ts"]
-                end
-            end
-            subgraph trigger["CoinbaseTrigger/"]
-                D1["CoinbaseTrigger.node.ts<br/><i>poll method</i>"]
-                D2["CoinbaseTrigger.node.json"]
-            end
-        end
-        subgraph shared["shared/"]
-            S1["cdpClientFactory.ts"]
-            S2["networkOptions.ts"]
-            S3["toolFactory.ts"]
-            S4["types.ts"]
-        end
-    end
-```
+> **See [IMPLEMENTATION.md](IMPLEMENTATION.md) for detailed Mermaid architecture diagrams** (rendered on GitHub).
 
 ---
 
@@ -162,7 +72,7 @@ graph TD
 ### n8n Community Nodes (Recommended)
 
 1. Go to **Settings > Community Nodes** in your n8n instance
-2. Enter `n8n-nodes-coinbase-cdp`
+2. Enter `n8n-nodes-coinbase-cdp-agentkit`
 3. Click **Install**
 
 See the [n8n community nodes installation guide](https://docs.n8n.io/integrations/community-nodes/installation/gui-install/) for details.
@@ -171,7 +81,7 @@ See the [n8n community nodes installation guide](https://docs.n8n.io/integration
 
 ```bash
 cd ~/.n8n/custom
-npm install n8n-nodes-coinbase-cdp
+npm install n8n-nodes-coinbase-cdp-agentkit
 ```
 
 Restart n8n after installation. See [manual install docs](https://docs.n8n.io/integrations/community-nodes/installation/manual-install/).
@@ -198,24 +108,6 @@ You need a **Coinbase CDP API key** from the [CDP Portal](https://portal.cdp.coi
 
 > **Note**: The Wallet Secret is only shown once during key creation. If you lose it, you'll need to create a new API key.
 
-### Credential Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Portal as CDP Portal
-    participant n8n
-    participant SDK as CDP SDK
-
-    User->>Portal: Create API Key
-    Portal-->>User: API Key ID + Secret + Wallet Secret
-    User->>n8n: Configure CoinbaseCdpApi credential
-    n8n->>SDK: CdpClient({ apiKeyId, apiKeySecret, walletSecret })
-    SDK-->>n8n: Authenticated client
-    n8n->>SDK: Execute blockchain operations
-    SDK-->>n8n: Results
-```
-
 ---
 
 ## Nodes
@@ -224,21 +116,12 @@ sequenceDiagram
 
 The primary node for deterministic blockchain operations. Processes items through a resource/operation pattern. Supports [`usableAsTool: true`](https://docs.n8n.io/integrations/creating-nodes/build/declarative-style-node/#usable-as-tool), so it can also be used directly as an AI Agent tool.
 
-```mermaid
-flowchart LR
-    Input["Input Items"] --> Execute["execute()"]
-
-    Execute --> Router{Resource?}
-    Router -->|account| ACC["Account Ops"]
-    Router -->|solanaAccount| SOL["Solana Ops"]
-    Router -->|smartAccount| SMA["Smart Account"]
-    Router -->|transfer| TRN["Transfer Ops"]
-    Router -->|swap| SWP["Swap Ops"]
-    Router -->|policy| POL["Policy CRUD"]
-    Router -->|balance| BAL["Balance Query"]
-
-    ACC & SOL & SMA & TRN & SWP & POL & BAL --> SDK["CDP SDK"]
-    SDK --> Output["Output Items"]
+```
+Input Items → execute() → Resource Router → CDP SDK → Output Items
+                              │
+          ┌───────┬───────┬───┴───┬───────┬───────┬────────┐
+          ▼       ▼       ▼       ▼       ▼       ▼        ▼
+       Account  Solana  Smart  Transfer  Swap   Policy  Balance
 ```
 
 #### Resources & Operations
@@ -300,28 +183,12 @@ flowchart LR
 
 Connect blockchain operations to n8n's AI Agent node. Each tool is a [LangChain `DynamicStructuredTool`](https://v03.api.js.langchain.com/classes/_langchain_core.tools.DynamicStructuredTool.html) that an LLM can invoke autonomously. Tool names and schemas are compatible with [Coinbase AgentKit](https://docs.cdp.coinbase.com/agent-kit/welcome) conventions.
 
-#### AI Agent Workflow
-
-```mermaid
-flowchart TB
-    Chat["Chat Trigger<br/><i>User message</i>"] --> Agent["AI Agent<br/><i>Claude / GPT / Gemini</i>"]
-    Agent --> Response["Chat Response"]
-
-    Agent -.->|"tool call"| T1["CDP Tool:<br/>Wallet Details"]
-    Agent -.->|"tool call"| T2["CDP Tool:<br/>Native Transfer"]
-    Agent -.->|"tool call"| T3["CDP Tool:<br/>ERC-20 Transfer"]
-    Agent -.->|"tool call"| T4["CDP Tool:<br/>Get Balance"]
-    Agent -.->|"tool call"| T5["CDP Tool:<br/>Swap Tokens"]
-    Agent -.->|"tool call"| T6["CDP Tool:<br/>Get Swap Price"]
-    Agent -.->|"tool call"| T7["CDP Tool:<br/>Request Faucet"]
-
-    T1 -.->|"result"| Agent
-    T2 -.->|"result"| Agent
-    T3 -.->|"result"| Agent
-    T4 -.->|"result"| Agent
-    T5 -.->|"result"| Agent
-    T6 -.->|"result"| Agent
-    T7 -.->|"result"| Agent
+```
+Chat Trigger → AI Agent (Claude/GPT) → Chat Response
+                    │ tools
+       ┌────────────┼────────────┐
+  [CDP Tool:   [CDP Tool:   [CDP Tool:
+   Wallet]      Transfer]     Swap]     ... (7 tools)
 ```
 
 #### Available Tools
@@ -336,31 +203,6 @@ flowchart TB
 | Get Swap Price | `get_swap_price` | `{ accountName, fromToken, toToken, fromAmount, network }` | Get price quote without executing |
 | Request Faucet | `request_faucet` | `{ address, token, network }` | Request testnet tokens (ETH, USDC, SOL) |
 
-#### Tool Creation Flow
-
-```mermaid
-sequenceDiagram
-    participant n8n as n8n AI Agent
-    participant Node as CoinbaseAgentTool
-    participant TF as toolFactory
-    participant LC as DynamicStructuredTool
-    participant SDK as CDP SDK
-
-    n8n->>Node: supplyData(itemIndex)
-    Node->>Node: getNodeParameter('tool')
-    Node->>Node: getCdpClient(credentials)
-    Node->>TF: createAgentTool({ name, schema, func })
-    TF->>LC: new DynamicStructuredTool({ name, schema, func })
-    TF-->>Node: tool instance
-    Node-->>n8n: { response: tool }
-
-    Note over n8n,SDK: Later, when LLM decides to call the tool:
-    n8n->>LC: invoke({ param1, param2 })
-    LC->>SDK: CDP API call
-    SDK-->>LC: result
-    LC-->>n8n: JSON string (or error string)
-```
-
 #### AI Agent Setup
 
 1. Add a **Chat Trigger** node
@@ -374,31 +216,6 @@ sequenceDiagram
 ### Coinbase CDP Trigger
 
 Polls for balance changes on any EVM address. Fires when any token balance increases, decreases, or a new token appears.
-
-#### Polling Mechanism
-
-```mermaid
-stateDiagram-v2
-    [*] --> FirstPoll: n8n scheduler triggers
-
-    FirstPoll --> StoreBaseline: Fetch balances from CDP SDK
-    StoreBaseline --> WaitForNext: Store in staticData, return null
-
-    WaitForNext --> SubsequentPoll: n8n scheduler triggers
-
-    SubsequentPoll --> FetchCurrent: Fetch balances from CDP SDK
-    FetchCurrent --> Compare: Load previous from staticData
-
-    Compare --> NoChange: Balances identical
-    Compare --> Changed: Differences found
-
-    NoChange --> UpdateState: Update staticData
-    UpdateState --> WaitForNext: Return null (no trigger)
-
-    Changed --> EmitEvents: Build change events
-    EmitEvents --> UpdateState2: Update staticData
-    UpdateState2 --> WaitForNext: Return events (trigger fires)
-```
 
 #### Configuration
 
@@ -452,87 +269,17 @@ See the [CDP SDK documentation](https://docs.cdp.coinbase.com/get-started/docs/u
 
 Import these from the `examples/` directory into your n8n instance.
 
-### 1. Account & Balance Check
+| # | Workflow | Description |
+|---|----------|-------------|
+| 1 | **Account & Balance Check** | Create an EVM account on Base Sepolia and query its token balances |
+| 2 | **Faucet & Transfer** | Request testnet ETH from the faucet and verify receipt |
+| 3 | **Swap Tokens** | Quote a WETH→USDC swap on Base, check liquidity, execute if available |
+| 4 | **AI Agent Blockchain** | Chat-driven blockchain operations via LLM tool calling |
+| 5 | **Balance Monitor** | Event-driven balance monitoring with configurable alerts |
+| 6 | **Multi-Chain Accounts** | Parallel account creation across EVM and Solana with testnet funding |
+| 7 | **Policy Management** | Query CDP governance policies for the organization |
 
-```mermaid
-flowchart LR
-    A["Manual Trigger"] --> B["Get/Create Account<br/><i>account.getOrCreate</i>"]
-    B --> C["Check Balance<br/><i>balance.listTokens</i>"]
-```
-
-Create an EVM account on Base Sepolia and query its token balances.
-
-### 2. Faucet & Transfer
-
-```mermaid
-flowchart LR
-    A["Manual Trigger"] --> B["Create Sender<br/><i>account.getOrCreate</i>"]
-    B --> C["Request Faucet ETH<br/><i>account.requestFaucet</i>"]
-    C --> D["Check Balance<br/><i>balance.listTokens</i>"]
-```
-
-Request testnet ETH from the faucet and verify receipt.
-
-### 3. Swap Tokens
-
-```mermaid
-flowchart LR
-    A["Manual Trigger"] --> B["Get Account"]
-    B --> C["Get Swap Quote<br/><i>WETH → USDC</i>"]
-    C --> D{"Liquidity<br/>Available?"}
-    D -->|Yes| E["Execute Swap"]
-    D -->|No| F["Stop"]
-```
-
-Quote a WETH→USDC swap on Base, check liquidity, execute if available.
-
-### 4. AI Agent Blockchain
-
-```mermaid
-flowchart TB
-    A["Chat Trigger"] --> B["AI Agent<br/><i>Claude / GPT</i>"]
-    B --> C["Chat Response"]
-    B -.->|tools| D["Wallet Details"]
-    B -.->|tools| E["Get Balance"]
-    B -.->|tools| F["Native Transfer"]
-    B -.->|tools| G["Request Faucet"]
-```
-
-Chat-driven blockchain operations via LLM tool calling.
-
-### 5. Balance Monitor
-
-```mermaid
-flowchart LR
-    A["CoinbaseTrigger<br/><i>polls every 5min</i>"] --> B{"Is ETH?"}
-    B -->|Yes| C["Format Alert"]
-    C --> D["Send Notification<br/><i>Slack / Email</i>"]
-    B -->|No| E["Skip"]
-```
-
-Event-driven balance monitoring with configurable alerts.
-
-### 6. Multi-Chain Accounts
-
-```mermaid
-flowchart TB
-    A["Manual Trigger"] --> B["EVM Account<br/><i>base-sepolia</i>"]
-    A --> C["Solana Account<br/><i>solana-devnet</i>"]
-    B --> D["EVM Faucet"]
-    C --> E["Solana Faucet"]
-    E --> F["Smart Account<br/><i>ERC-4337</i>"]
-```
-
-Parallel account creation across EVM and Solana with testnet funding.
-
-### 7. Policy Management
-
-```mermaid
-flowchart LR
-    A["Manual Trigger"] --> B["List All Policies<br/><i>policy.list</i>"]
-```
-
-Query CDP governance policies for the organization.
+> **See [IMPLEMENTATION.md](IMPLEMENTATION.md#example-workflow-diagrams) for visual workflow diagrams** (rendered on GitHub).
 
 ---
 
@@ -550,14 +297,6 @@ git clone https://github.com/pvdyck/n8n-nodes-coinbase-cdp
 cd n8n-nodes-coinbase-cdp
 npm install
 ```
-
-### Development Server
-
-```bash
-npm run dev
-```
-
-Uses [`@n8n/node-cli`](https://www.npmjs.com/package/@n8n/node-cli) to symlink the package into n8n's custom extensions, run the TypeScript compiler in watch mode, and start n8n with hot reload. Open `http://localhost:5678` to access the editor.
 
 ### Scripts
 
@@ -589,14 +328,6 @@ CDP_WALLET_SECRET=your-wallet-secret
 ### Test Coverage
 
 116 tests across 8 suites with **100% coverage** on all metrics:
-
-```
----------------------------------|---------|----------|---------|---------|
-File                             | % Stmts | % Branch | % Funcs | % Lines |
----------------------------------|---------|----------|---------|---------|
-All files                        |     100 |      100 |     100 |     100 |
----------------------------------|---------|----------|---------|---------|
-```
 
 | Suite | Tests | Covers |
 |-------|:-----:|--------|
@@ -634,15 +365,9 @@ Tool names (`get_wallet_details`, `native_transfer`, etc.) and schemas match [Co
 ### Triple-Pathway Usage via `usableAsTool`
 
 The `CoinbaseCdp` action node sets `usableAsTool: true`, enabling three usage modes:
-
-```mermaid
-flowchart TB
-    Node["CoinbaseCdp Node"]
-
-    Node -->|"1. Direct"| D["Trigger → CoinbaseCdp → Next Node<br/><i>Resource/operation UI</i>"]
-    Node -->|"2. AI Tool"| A["AI Agent ─ tools ─► CoinbaseCdp<br/><i>LLM selects operation</i>"]
-    Node -->|"3. Expression"| E["$('CoinbaseCdp').item.json.address<br/><i>Reference in other nodes</i>"]
-```
+1. **Direct**: Trigger → CoinbaseCdp → Next Node (resource/operation UI)
+2. **AI Tool**: AI Agent → tools → CoinbaseCdp (LLM selects operation)
+3. **Expression**: `$('CoinbaseCdp').item.json.address` (reference in other nodes)
 
 ### Error-Safe Agent Tools
 
@@ -655,6 +380,8 @@ n8n supports polling natively. The [`@coinbase/cdp-sdk`](https://github.com/coin
 ### `DynamicStructuredTool` with `any` Typed Schema
 
 Complex Zod schemas trigger TypeScript error TS2589 (deep instantiation) in LangChain's type system. Typing the schema as `any` in the `ToolDefinition` interface avoids this while keeping runtime validation intact via Zod.
+
+> **See [IMPLEMENTATION.md](IMPLEMENTATION.md) for full architecture diagrams.**
 
 ---
 
